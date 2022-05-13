@@ -158,13 +158,6 @@ int main()
     {
         updateTopologyTable(virtualTime);
 
-        // cout << "[time: " << virtualTime << "]" << endl << "Topology: \n";
-        // for(int i=0; i<NODES; i++){
-        //     for(int j=0; j<NODES; j++)
-        //         cout << nodeLink[{i,j}] << " ";
-        //     cout << endl;
-        // }
-
         for (int i=0; i<10; i++)
         {
             string fromFile = "from" + to_string(i) + ".txt";

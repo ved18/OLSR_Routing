@@ -4,30 +4,23 @@
 using namespace std;
 #define NODES 10
 
-int nodeId, destination, delay=-1;
-string message;
-
-int sequenceNo = 0;
+int nodeId, destination, delay=-1, sequenceNo = 0;
+string message, prevHello[NODES];
 streampos position = 0;
+int lastHello[NODES] = {-1}, lastTC[NODES], recentSeq[NODES];
 
-int lastHello[NODES] = {-1};
-string prevHello[NODES];
-int lastTC[NODES];
-int recentSeq[NODES];
-
-set<int> mprList, msList;
-set<int> tcTable[NODES];
-
-set<int> oneHopList, twoHopList;
+set<int> mprList, msList, tcTable[NODES], oneHopList, twoHopList;
 
 enum LinkType { NA, UNIDIR, BIDIR, MPR };
 LinkType nbrTable[NODES];
 
 set<int> lastHop[NODES], twoHopnbr[NODES], fromOneHop[NODES];
 
-typedef struct routingTableNode {
-    int distance, next_hop;
+typedef struct routingTableNode 
+{
+    int distance, nextHop;
 }routingTableNode;
+
 map<int, routingTableNode> routingTable;
 
 string getFileName(string prefix)
@@ -58,33 +51,34 @@ void appendMessage(string msg, string file)
     fp.close();
 }
 
-//done refactoring
-void CalculateMprSet() {
-
+void calculateMpr() 
+{
     mprList.clear();
-    for (int i=0; i<NODES; ++i)
+    for(int i=0; i<NODES; ++i)
     {
-        if (nbrTable[i] == MPR)
+        if(nbrTable[i] == MPR)
             nbrTable[i] = BIDIR;
     }
 
     set<int> remTwoHop(twoHopList);
     int cnt[NODES], choose;
 
-    while (!remTwoHop.empty()) {        
-        for (int i=0; i<NODES; ++i) cnt[i] = 0;
+    while(!remTwoHop.empty())
+    {
+        for(int i=0; i<NODES; ++i)
+            cnt[i] = 0;
         choose = -1;
 
-        for (auto &itr : remTwoHop)
+        for(auto &itr : remTwoHop)
         {
-            for (auto &itr2 : twoHopnbr[itr])
+            for(auto &itr2 : twoHopnbr[itr])
             {
-                
-                if (mprList.find(itr2) != mprList.end()) continue;
+                if(mprList.find(itr2) != mprList.end()) 
+                    continue;
 
-                ++cnt[itr2];
+                cnt[itr2]++;
                 
-                if ( (choose == -1) || (cnt[itr2] > cnt[choose]) )
+                if( (choose == -1) || (cnt[itr2] > cnt[choose]) )
                     choose = itr2;
             }
         }
@@ -92,53 +86,52 @@ void CalculateMprSet() {
         mprList.insert(choose);
         nbrTable[choose] = MPR;
 
-        for (auto &itr : fromOneHop[choose])
+        for(auto &itr : fromOneHop[choose])
         {
             remTwoHop.erase(itr);
         }
     }
 }
 
-
-//done refactoring
-void calculateRT() {
-
+void calculateRT()
+{
     routingTable.clear();
 
-    for (auto &itr : oneHopList)
+    for(auto &itr : oneHopList)
     {
         routingTableNode node;
-        node.next_hop = itr;
+        node.nextHop = itr;
         node.distance = 1;
         routingTable.insert({itr, node});
     }
 
-    for (auto &itr : twoHopList)
+    for(auto &itr : twoHopList)
     {
         routingTableNode node;
         auto nHop = twoHopnbr[itr].begin();
-        node.next_hop = *nHop;
+        node.nextHop = *nHop;
         node.distance = 2;
         routingTable.insert( {itr, node} );
     }
 
     bool check = true;
     int hops = 2;
-    while (check)
+    while(check)
     {
         check = false;
 
-        for (int i=0; i<NODES; ++i)
+        for(int i=0; i<NODES; ++i)
         {  
-            for (auto &it : tcTable[i]) {
+            for(auto &it : tcTable[i]) {
                 
-                if (i == nodeId || routingTable.find(i) != routingTable.end())
+                if(i == nodeId || routingTable.find(i) != routingTable.end())
                     break;
                 
                 auto ret = routingTable.find(it);
-                if( ret != routingTable.end() && (ret->second).distance == hops) {
+                if(ret != routingTable.end() && (ret->second).distance == hops)
+                {
                     routingTableNode node;
-                    node.next_hop = (ret->second).next_hop;
+                    node.nextHop = (ret->second).nextHop;
                     node.distance = hops+1;
                     routingTable.insert({i, node});
                     
@@ -152,240 +145,195 @@ void calculateRT() {
     }
 }
 
-string GenerateHelloMsg() {
-    string hello_str = "";
+string createHello() 
+{
+    string genHelloMsg = "";
+    genHelloMsg += ( "* " + to_string(nodeId) + " HELLO " );
 
-    hello_str += ( "* " + to_string(nodeId) + " HELLO " );
-
-    hello_str += "UNIDIR ";
-    for (int i=0; i<NODES; ++i) {
-        if (nbrTable[i] == UNIDIR)
-            hello_str += to_string(i) + " ";
+    genHelloMsg += "UNIDIR ";
+    for(int i=0; i<NODES; ++i) {
+        if(nbrTable[i] == UNIDIR)
+            genHelloMsg += to_string(i) + " ";
     }
 
-    hello_str += "BIDIR ";
-    for (int i=0; i<NODES; ++i) {
-        if (nbrTable[i] == BIDIR)
-            hello_str += to_string(i) + " ";
+    genHelloMsg += "BIDIR ";
+    for(int i=0; i<NODES; ++i)
+    {
+        if(nbrTable[i] == BIDIR)
+            genHelloMsg += to_string(i) + " ";
     }
 
-    hello_str += "MPR ";
-    for (int i=0; i<NODES; ++i) {
-        if (nbrTable[i] == MPR)
-            hello_str += to_string(i) + " ";
+    genHelloMsg += "MPR ";
+    for(int i=0; i<NODES; ++i) {
+        if(nbrTable[i] == MPR)
+            genHelloMsg += to_string(i) + " ";
     }
 
-    return hello_str;
+    return genHelloMsg;
 }
 
-string GenerateTcMsg() {
-    ++sequenceNo;
-    
-    string tc_str = "";
-    tc_str += ( "* " + to_string(nodeId) + " TC " + to_string(nodeId) + " " + to_string(sequenceNo) + " MS ");
-
-    for (set<int>::iterator it = msList.begin(); it != msList.end(); ++it) {
-        tc_str += ( to_string(*it) + " " );
-    }
-
-    return tc_str;
+string generateData(int hop) 
+{
+    string genDataMsg = "";
+    genDataMsg += (to_string(hop) + " " + to_string(nodeId) + " DATA " + to_string(nodeId) + " " + to_string(destination) + " " + message);
+    return genDataMsg;
 }
 
-string GenerateDataMsg(int next_hop) {
-    string data_str = "";
-    data_str += (to_string(next_hop) + " " + to_string(nodeId) + " DATA " + to_string(nodeId) + " " + to_string(destination) + " " + message);
-    return data_str;
-}
-
-void SendHelloMsg() {
-    string hello_msg = GenerateHelloMsg();
-    appendMessage(hello_msg, "from");
-}
-
-void SendTcMsg() {
-    string tc_msg = GenerateTcMsg();
-    appendMessage(tc_msg, "from");
-}
-
-void SendDataMsg(int next_hop) {
-    string data_msg = GenerateDataMsg(next_hop);
-
-    appendMessage(data_msg, "from");
-}
-
-void ForwardTcMsg(string msg, string fromnbr) {
-    msg.replace(2, fromnbr.size(), to_string(nodeId));
-
+void sendDataFurther(string msg, string nextHop, string fromNeighbor, int hop) 
+{
+    msg.replace(nextHop.size()+1, fromNeighbor.size(), to_string(nodeId));
+    msg.replace(0, nextHop.size(), to_string(hop));
     appendMessage(msg, "from");
 }
 
-void ForwardDataMsg(string msg, string nxthop, string fromnbr, int next_hop) {
-    msg.replace(nxthop.size()+1, fromnbr.size(), to_string(nodeId));
-    msg.replace(0, nxthop.size(), to_string(next_hop));
+bool processHello(string msg, int time) 
+{
+    stringstream s(msg);
+    string ignore, linkType;
+    int fromNeighbor, neighbor;
+    vector<int> unidirFromNeigh, bidirFromNeigh, mprFromNeigh;
+    bool unidirFromNeighId = false, bidirFromNeighId = false, mprFromNeighId = false;
 
-    appendMessage(msg, "from");
-}
+    s >> ignore >> fromNeighbor >> ignore;
+    lastHello[fromNeighbor] = time;
 
-bool HandleHelloMsg(string msg, int time) {
-    stringstream str_stream(msg);
-    string dumb, link_type;
-    int fromnbr, nbr;
-    
-    // Use vector to record the neighbor information of node fromnbr.
-    vector<int> unidir_of_fromnbr;
-    vector<int> bidir_of_fromnbr;
-    vector<int> mpr_of_fromnbr;
+    if(msg == prevHello[fromNeighbor]) 
+        return false;
+    prevHello[fromNeighbor] = msg;
 
-    // Use these flags to represent the neighborship between node id and fromnbr. 
-    bool id_is_unidir_of_fromnbr = false;
-    bool id_is_bidir_of_fromnbr = false;
-    bool id_is_mpr_of_fromnbr = false;
-
-    // Read HELLO message: * <fromnbr> HELLO.
-    str_stream >> dumb >> fromnbr >> dumb;
-    
-    lastHello[fromnbr] = time;
-
-    // Compare previous HELLO message with this one.
-    // If they are the same, nothing changes, no need to handle. (Since we don't have expire time.)
-    if (msg == prevHello[fromnbr]) return false;
-    prevHello[fromnbr] = msg;
-
-    // Read and process remaining HELLO message content.
-    while (str_stream >> nbr || !str_stream.eof()) {
-        // Identify neighbor link types: UNIDIR, BIDIR, or MPR.
-        if (str_stream.fail()) {
-            str_stream.clear();
-            str_stream >> link_type;
+    while(s >> neighbor || !s.eof()) 
+    {
+        if(s.fail()) 
+        {
+            s.clear();
+            s >> linkType;
             continue;
         }
-
-        // Put neighbor information of node fromnbr into seperate vectors.
-        // Note that do not put id itself into any vector.
-        if (link_type == "UNIDIR") {
-            if (nbr == nodeId)  id_is_unidir_of_fromnbr = true;
-            else    unidir_of_fromnbr.push_back(nbr);
+        if(linkType == "UNIDIR") 
+        {
+            if(neighbor == nodeId) 
+                unidirFromNeighId = true;
+            else    
+                unidirFromNeigh.push_back(neighbor);
         }
-        else if (link_type ==  "BIDIR") {
-            if (nbr == nodeId)  id_is_bidir_of_fromnbr = true;
-            else    bidir_of_fromnbr.push_back(nbr);
+        else if(linkType ==  "BIDIR") 
+        {
+            if(neighbor == nodeId)  
+                bidirFromNeighId = true;
+            else    
+                bidirFromNeigh.push_back(neighbor);
         }
-        else if (link_type ==  "MPR") {
-            if (nbr == nodeId)  id_is_mpr_of_fromnbr = true;
-            else mpr_of_fromnbr.push_back(nbr);
+        else if(linkType ==  "MPR") 
+        {
+            if(neighbor == nodeId)  
+                mprFromNeighId = true;
+            else 
+                mprFromNeigh.push_back(neighbor);
         }
     }
 
-    // Based on the neighbor information of fromnbr, update neighbor table of node id itself.
-    if (id_is_unidir_of_fromnbr || id_is_bidir_of_fromnbr || id_is_mpr_of_fromnbr) {
-        // Update one-hop table and set.
-        nbrTable[fromnbr] = BIDIR;
-       oneHopList.insert(fromnbr);
-
-        // Clear two-hop information based on old HELLO of fromnbr.
-        for (set<int>::iterator it = fromOneHop[fromnbr].begin(); it != fromOneHop[fromnbr].end(); ++it) {
-            twoHopnbr[*it].erase(fromnbr);
-            if (twoHopnbr[*it].empty())twoHopList.erase(*it);
+    if(unidirFromNeighId || bidirFromNeighId || mprFromNeighId) 
+    {
+        nbrTable[fromNeighbor] = BIDIR;
+        oneHopList.insert(fromNeighbor);
+     
+        for(auto &itr : fromOneHop[fromNeighbor]) 
+        {
+            twoHopnbr[itr].erase(fromNeighbor);
+            if(twoHopnbr[itr].empty())
+                twoHopList.erase(itr);
         }
-        fromOneHop[fromnbr].clear();
-
-        // Update two-hop tables.
-        for (vector<int>::iterator it = bidir_of_fromnbr.begin(); it != bidir_of_fromnbr.end(); ++it) {
-            fromOneHop[fromnbr].insert(*it);
-            twoHopnbr[*it].insert(fromnbr);
+        fromOneHop[fromNeighbor].clear();
+        for(auto &itr : bidirFromNeigh) 
+        {
+            fromOneHop[fromNeighbor].insert(itr);
+            twoHopnbr[itr].insert(fromNeighbor);
         }
-        for (vector<int>::iterator it = mpr_of_fromnbr.begin(); it != mpr_of_fromnbr.end(); ++it) {
-            fromOneHop[fromnbr].insert(*it);
-            twoHopnbr[*it].insert(fromnbr);
+        for(auto &itr : mprFromNeigh) 
+        {
+            fromOneHop[fromNeighbor].insert(itr);
+            twoHopnbr[itr].insert(fromNeighbor);
         }
 
-        // Update two-hop set.
-       twoHopList.clear();
-        for (int i=0; i<NODES; ++i) {
-            if (!twoHopnbr[i].empty()) {
+        twoHopList.clear();
+        for(int i=0; i<NODES; ++i) 
+        {
+            if(!twoHopnbr[i].empty()) 
                twoHopList.insert(i);
-            }
         }
                 
-        // Update MS set.
-        if (msList.find(fromnbr) != msList.end() && !id_is_mpr_of_fromnbr) msList.erase(fromnbr);
-        else if (id_is_mpr_of_fromnbr) msList.insert(fromnbr);
+        if(msList.find(fromNeighbor) != msList.end() && !mprFromNeighId) 
+            msList.erase(fromNeighbor);
+        else if(mprFromNeighId) 
+            msList.insert(fromNeighbor);
     }
-    else {
-        nbrTable[fromnbr] = UNIDIR;
-    }
+    else 
+        nbrTable[fromNeighbor] = UNIDIR;
 
     return true;
 }
 
-// Handle incoming TC message: 
-//  1. Forward this TC message if necessary.
-//  2. Update TC table if necessary.
-// Return true if TC table is changed because of this TC message;
-// otherwise, return false.
-bool HandleTcMsg(string msg, int time) {
-    stringstream str_stream(msg);
-    string dumb;
-    int fromnbr, srcnode, seqno, msnode;
-
-    str_stream >> dumb >> fromnbr >> dumb >> srcnode >> seqno >> dumb;
-
-    lastTC[srcnode] = time;
-
-    // No need to process TC generating from itself and TC with old information.
-    if(srcnode == nodeId || seqno <= recentSeq[srcnode]) return false;
-    
-    recentSeq[srcnode] = seqno;
-
-    // Forward this TC message if it is coming from the node in MS set.
-    if (msList.find(fromnbr) != msList.end()) {
-        ForwardTcMsg(msg, to_string(fromnbr));
-    }
-
-    // Clear old information from srcnode.
-    for (set<int>::iterator it =lastHop[srcnode].begin(); it !=lastHop[srcnode].end(); ++it) {
-        tcTable[*it].erase(srcnode);
-    }
-   lastHop[srcnode].clear();
-
-    // Update TC table.
-    while (str_stream >> msnode) {
-       lastHop[srcnode].insert(msnode);
-        tcTable[msnode].insert(srcnode);
-    }
-
-    return true;
-}
-
-void HandleDataMsg(string msg) {
-
+bool processTC(string msg, int time) 
+{
     stringstream s(msg);
-    int nxthop, fromnbr, srcnode, dstnode;
-    string dumb, temp;
+    string ignore;
+    int fromNeighbor, sourceNode, seqNumber, msNode;
+    s >> ignore >> fromNeighbor >> ignore >> sourceNode >> seqNumber >> ignore;
+    lastTC[sourceNode] = time;
 
-    s >> nxthop >> fromnbr >> dumb >> srcnode >> dstnode;
+    if(sourceNode == nodeId or seqNumber <= recentSeq[sourceNode]) 
+        return false;
+    
+    recentSeq[sourceNode] = seqNumber;
+
+    if(msList.find(fromNeighbor) != msList.end())
+    {
+        string temp = msg;
+        temp.replace(2, to_string(fromNeighbor).size(), to_string(nodeId));
+        appendMessage(temp, "from");
+    }
+
+    for(auto &itr : lastHop[sourceNode]) 
+    {
+        tcTable[itr].erase(sourceNode);
+    }
+    lastHop[sourceNode].clear();
+
+    while(s >> msNode) 
+    {
+        lastHop[sourceNode].insert(msNode);
+        tcTable[msNode].insert(sourceNode);
+    }
+    return true;
+}
+
+void processData(string msg) 
+{
+    stringstream s(msg);
+    int nextHop, fromNeighbor, sourceNode, dstNode;
+    string ignore, temp;
+
+    s >> nextHop >> fromNeighbor >> ignore >> sourceNode >> dstNode;
 
     temp = msg;
-    temp.replace(0, (to_string(nxthop)).size() + (to_string(fromnbr)).size() + dumb.size() + 
-                           (to_string(srcnode)).size() + (to_string(dstnode)).size() + 5, "" );
+    temp.replace(0, (to_string(nextHop)).size() + (to_string(fromNeighbor)).size() + ignore.size() + (to_string(sourceNode)).size() + (to_string(dstNode)).size() + 5, "" );
 
-    if (dstnode == nodeId)
+    if(dstNode == nodeId)
     {
         appendMessage(temp, "received");
         return;
     }
 
-    auto node = routingTable.find(dstnode);
+    auto node = routingTable.find(dstNode);
     
-    if (node != routingTable.end())
+    if(node != routingTable.end())
     {
-        ForwardDataMsg(msg, to_string(nxthop), to_string(fromnbr), (node->second).next_hop);
+        sendDataFurther(msg, to_string(nextHop), to_string(fromNeighbor), (node->second).nextHop);
     }
 }
 
-
-void RemoveNeighbor(int n) {
-
+void removeNbr(int n) 
+{
     oneHopList.erase(n);
     nbrTable[n] = NA;
     msList.erase(n);
@@ -393,111 +341,86 @@ void RemoveNeighbor(int n) {
     for(auto &itr : fromOneHop[n])
     {
         twoHopnbr[itr].erase(n);
-        if (twoHopnbr[itr].empty())  twoHopList.erase(itr);
+        if(twoHopnbr[itr].empty())  
+            twoHopList.erase(itr);
     }
     fromOneHop[n].clear();
 
-    if (!twoHopnbr[n].empty()) { 
+    if(!twoHopnbr[n].empty()) 
        twoHopList.insert(n);
-    }
 }
 
-// Remove TC information from node i.
-void RemoveTcInfoFrom(int i) {
-#ifdef DEBUG
-    cout << "* Remove TC information from node " << i << endl;
-#endif
+void RemoveTcInfoFrom(int i)
+{
 
-    // Remove information based on TC from node i.
-    for (set<int>::iterator it =lastHop[i].begin(); it !=lastHop[i].end(); ++it) {
-        tcTable[*it].erase(i);
+    for (auto &itr : lastHop[i]) 
+    {
+        tcTable[itr].erase(i);
     }
-   lastHop[i].clear();
+    lastHop[i].clear();
 
 }
 
-// Calculate and update MPR set.
-// Use traditional greedy algorithm to select MPRs.
+bool processToFile(int time) 
+{
+    bool neighborhoodChanged = false, tcChanged = false;
 
-bool processToFile(int time) {
-
-    // Use flags to indicate if there is any change in neighborhood or TC table.
-    bool neighborhood_changed = false;
-    bool tc_changed = false;
-
-    // Open toX.txt for reading.
     string filename = getFileName("to");
     ifstream inputfile;
     inputfile.open(filename.c_str(), ios::in);
-    if (!inputfile.is_open()) {
-        //cout<<"\nCould not open file:"<<filename<<endl;
+    if(!inputfile.is_open()) 
         return false;
-    }
 
-
-    // Only process new messages.
-    streampos last_byte_read = 0;
+    streampos lastByteRead = 0;
     inputfile.seekg(position);
     string line;
     
-    while (getline(inputfile, line)) {
+    while(getline(inputfile, line))
+    {
 
-#ifdef DEBUG
-        cout << "* Processing message: " << line << endl;
-#endif
+        lastByteRead = inputfile.tellg();
 
-        last_byte_read = inputfile.tellg();
-
-        // Get the node id where this message from and the type of this message.
-        // Type of messages and the formats: 
-        //  - HELLO msg: * <node> HELLO UNIDIR <neighbor> ... <neighbor> 
-        //                              BIDIR <neighbor> ... <neighbor> 
-        //                              MPR <neighbor> ... <neighbor>
-        //  - TC msg: * <fromnbr> TC <srcnode> <seqno> MS <msnode> ... <msnode>
-        //  - DATA msg: <nxthop> <fromnbr> DATA <srcnode> <dstnode> <string>
-        
-        stringstream str_stream(line);
+        stringstream s(line);
         string useless, type;
-        int fromnbr;
-        str_stream >> useless >> fromnbr >> type;
+        int fromNeighbor;
+        s >> useless >> fromNeighbor >> type;
         
-        if (type == "HELLO") {
-            neighborhood_changed |= HandleHelloMsg(line, time);
+        if(type == "HELLO") 
+        {
+            neighborhoodChanged |= processHello(line, time);
         }        
-        else if (type == "TC") {
-            tc_changed |= HandleTcMsg(line, time);
+        else if(type == "TC") 
+        {
+            tcChanged |= processTC(line, time);
         }
-        else if (type == "DATA") {
-            HandleDataMsg(line);
+        else if(type == "DATA") 
+        {
+            processData(line);
         }
             
     }
         
-    position = max(last_byte_read, position);
+    position = max(lastByteRead, position);
     inputfile.close();
 
-    // Check lastHello[i] for all node i. 
-    // If have not receive HELLO for 15 seconds, remove node i from neighbor table.
-    for (int i=0; i<NODES; ++i) {
-        if (oneHopList.find(i) !=oneHopList.end() 
-                && (time - lastHello[i]) >= 15 ) {
-            RemoveNeighbor(i);
-            neighborhood_changed |= true;
+    for(int i=0; i<NODES; ++i) 
+    {
+        if(oneHopList.find(i) !=oneHopList.end() && (time - lastHello[i]) >= 15) 
+        {
+            removeNbr(i);
+            neighborhoodChanged |= true;
         }
     }
 
-    // From HELLOs, update MPRs if necessary.
-    if (neighborhood_changed) {
-        CalculateMprSet();
-    }
+    if(neighborhoodChanged) 
+        calculateMpr();
 
-    return (neighborhood_changed || tc_changed);
+    return (neighborhoodChanged or tcChanged);
 }
-
 
 int main(int argc, char **argv)
 {
-    for (int i=1; i<argc; ++i)
+    for(int i=1; i<argc; ++i)
     {
         stringstream s(argv[i]);
         
@@ -511,59 +434,61 @@ int main(int argc, char **argv)
             s >> delay;
     }
     
-    bool dataSent = false;
-    bool changeRT = false;
-    
+    bool dataSent = false, changeRT = false;
     int virtualTime = 0;
 
     while(virtualTime < 120) 
     {
-        
         changeRT = false;
-        
         changeRT = changeRT or processToFile(virtualTime);
 
-        for (int i=0; i<NODES; ++i) {
-            if (virtualTime - lastTC[i] >= 30 && !lastHop[i].empty()) {
+        for(int i=0; i<NODES; ++i) 
+        {
+            if(virtualTime - lastTC[i] >= 30 && !lastHop[i].empty()) 
+            {
                 RemoveTcInfoFrom(i);
                 changeRT = changeRT or true;
             }
         }
 
-
-        // Recalculate routing table if necessary.
-        if (changeRT) {
+        if(changeRT) 
             calculateRT();
-        }
 
-        if (nodeId != destination and !dataSent and virtualTime == delay) 
+        if(nodeId != destination and !dataSent and virtualTime == delay) 
         {
             auto itr = routingTable.find(destination);
 
             if(itr != routingTable.end())
             {
-                SendDataMsg( (itr->second).next_hop );
+                string temp = generateData((itr->second).nextHop);
+                appendMessage(temp, "from");
                 dataSent = true;
             }
             else
-            {
                 delay += 30;
+        }
+        
+        if(virtualTime % 5 == 0)
+        {
+            string s = createHello();
+            appendMessage(s, "from");
+        }
+
+        if(virtualTime % 10 == 0 && !msList.empty())
+        {
+            sequenceNo++;
+
+            string s = "";
+            s += ( "* " + to_string(nodeId) + " TC " + to_string(nodeId) + " " + to_string(sequenceNo) + " MS ");
+
+            for(auto &itr : msList)
+            {
+                s += ( to_string(itr) + " " );
             }
-        }
-        
-        // If virtualTime is a multiple of 5, send HELLO.
-        if (virtualTime % 5 == 0)
-        {
-            SendHelloMsg();
+
+            appendMessage(s, "from");
         }
 
-        // If virtualTime is a multiple of 10, and MS set is not empty, create and send TC.
-        if (virtualTime % 10 == 0 && !msList.empty())
-        {
-            SendTcMsg();
-        }
-
-        
         sleep(1);
         virtualTime++;
     }
