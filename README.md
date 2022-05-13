@@ -8,6 +8,8 @@ Steps for every run:
 make clean
 make -> this will create the node and controller executables along with an empty topology.txt file.
 Copy the topology to use in topology.txt
+Add the commands to run the node and controller in run.sh
+./run.sh -> to run the final program.
 
 
 Please use make clean before every run so as to clear the to and from files.
